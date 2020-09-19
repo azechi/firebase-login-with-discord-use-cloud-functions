@@ -9,6 +9,16 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/login",
+        "function": "login"
+      },
+      {
+        "source": "/token",
+        "function": "token"
+      }
     ]
   },
   "emulators": {
