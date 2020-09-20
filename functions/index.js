@@ -11,6 +11,10 @@ const url = require("url");
 
 const config = functions.config();
 
+const https = require("https");
+const agent = new https.Agent({ keepAlive: true });
+const fetch = require("node-fetch");
+
 admin.initializeApp();
 
 exports.login = functions.https.onRequest((req, res) => {
@@ -83,7 +87,7 @@ function buildAuthorizeRequest(state, redirect_uri, code_challenge) {
   return `${baseUrl}?${qs.stringify(p)}`;
 }
 
-exports.token = functions.https.onRequest((req, res) => {
+exports.token = functions.https.onRequest(async (req, res) => {
   if (req.method != "POST") {
     res.sendStatus(400);
     return;
@@ -106,9 +110,8 @@ exports.token = functions.https.onRequest((req, res) => {
     return;
   }
 
-  // debug 1日
-  const _d = 1000 * 60 * 60 * 24 * 1;
-  if (+session.expires + _d <= Date.now()) {
+  const now = Date.now();
+  if (+session.expires + _d <= now) {
     res.sendStatus(400);
     return;
   }
@@ -118,32 +121,33 @@ exports.token = functions.https.onRequest((req, res) => {
     return;
   }
 
-  // __session cookie
-  // destroy __session cookie
+  const isLocalhost =
+    req.headers["x-forwarded-host"].split(":")[0] == "localhost";
+  const redirect_uri = new url.URL(
+    "/",
+    `http${isLocalhost ? "" : "s"}://${req.headers["x-forwarded-host"]}`
+  );
 
-  // checks session expired
-  // verify state parameter
+  const response = await fetch("https://discord.com/api/oauth2/token", {
+    method: "POST",
+    agent: agent,
+    body: new url.URLSearchParams({
+      client_id: config.discord.azechify.client_id,
+      //client_secret: config.discord.azechify.client_secret,
+      redirect_uri: redirect_uri,
+      grant_type: "authorization_code",
+      scope: "identify",
+      code_verifier: req.body.code_verifier,
+      code: req.body.code,
+    }),
+  });
 
-  // post token requiest
-  // {
-  //    client_id: config.discord.azechify.client_id,
-  //    client_secret: config.discord.azechify.client_secret,
-  //    redirect_uri,
-  //    grant_type:"authorization_code"
-  //    scope:"identify"
-  //
-  //    code_verifier: code_verifier,
-  //    code: code
-  // }
+  const json = await response.json();
 
-  // gets user id with access token from the discord profile api
-  // stores refresh_token with uid key
-
-  // response json object {firebase customToken}
-
-  res.status(200).json({ status: "OK" });
+  res.status(200).send(json);
 });
 
+// sign, sigunature, digest, hash
 /**
  * Hmac sha256 digest base64url
  * @param {string | Buffer | TypedArray | DataView} data
