@@ -42,8 +42,10 @@
             state: url.searchParams.get("state"),
           }),
         })
-          .then((res) => res.json())
-          .then((json) => console.log("token: ", json));
+          .then((res) => res.text())
+          .then((token) => {
+            firebase.auth().signInWithCustomToken(token).then(console.log);
+          });
 
         console.log("post token endpoint");
       }

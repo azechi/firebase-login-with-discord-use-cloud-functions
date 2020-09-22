@@ -111,7 +111,7 @@ exports.token = functions.https.onRequest(async (req, res) => {
   }
 
   const now = Date.now();
-  if (+session.expires + _d <= now) {
+  if (+session.expires + now <= now) {
     res.sendStatus(400);
     return;
   }
@@ -144,7 +144,34 @@ exports.token = functions.https.onRequest(async (req, res) => {
 
   const json = await response.json();
 
-  res.status(200).send(json);
+  const user = await fetch("https://discord.com/api/users/@me", {
+    agent: agent,
+    headers: { Authorization: `Bearer ${json.access_token}` },
+  }).then((res) => res.json());
+
+  const uid = `discord:${user.id}`;
+
+  try {
+    const userRecord = await admin.auth().getUser(uid);
+    functions.logger.log(userRecord);
+    await admin.auth().updateUser(uid, {
+      photoURL: `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.jpeg`,
+      displayName: user.username,
+    });
+  } catch (e) {
+    if (e.code != "auth/user-not-found") {
+      throw e;
+    }
+    functions.logger.log(e);
+    await admin.auth().createUser({
+      uid: uid,
+      photoURL: `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.jpeg`,
+      displayName: user.username,
+    });
+  }
+
+  const customToken = await admin.auth().createCustomToken(uid);
+  res.status(200).send(customToken);
 });
 
 // sign, sigunature, digest, hash
