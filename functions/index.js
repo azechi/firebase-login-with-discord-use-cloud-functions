@@ -38,7 +38,7 @@ exports.login = functions.https.onRequest(async (req, res) => {
     "__session",
     qs.stringify(
       hmac.sign({
-        state,
+        value: state,
         expires: Date.now() + 10 * 60 * 1000,
       })
     ),
@@ -71,12 +71,16 @@ exports.token = functions.https.onRequest(async (req, res) => {
     return;
   }
 
-  const sessionState = extractStateParameter(
-    cookieParse(req.headers.cookie)["__session"],
-    new Date()
+  const signedSession = qs.parse(
+    cookie.parse(req.headers.cookie)["__session"] || ""
   );
+  if (!verifySession(signedSession, new Date())) {
+    res.sendStatus(400);
+    return;
+  }
 
-  if (req.body.state !== sessionState) {
+  const session = signedSession.value;
+  if (req.body.state !== session.value) {
     res.sendStatus(400);
     return;
   }
@@ -103,8 +107,10 @@ exports.token = functions.https.onRequest(async (req, res) => {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   }).then((res) => res.json());
 
+  const uid = `discord:${user.id}`;
   await createOrUpdateUser(
-    `discord:${user.id}``https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.jpeg`,
+    uid,
+    `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.jpeg`,
     user.username
   );
 
@@ -156,26 +162,12 @@ function serverUrlRoot(req, res, next) {
   next();
 }
 
-/**
- * Verifies a session state parameter
- * @param {string} cookieHeadersValue request.headers.cookie
- */
-function verifyStateParameter(state, cookieHeadersValue, now) {
-  const cookies = cookie.parse(req.headers.cookie || "");
-  if (!cookies.__session) {
-    return false;
-  }
-
-  const session = qs.parse(cookies.__session);
+function verifySession(session, now) {
   if (!hmac.verify(session)) {
     return false;
   }
 
   if (+session.expires <= now.getTime()) {
-    return false;
-  }
-
-  if (state !== session.state) {
     return false;
   }
 
