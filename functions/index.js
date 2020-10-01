@@ -19,6 +19,37 @@ const hmac = new Hmac("sha256", Buffer.from(config.keys[0], "base64"));
 
 const noop = () => {};
 
+
+class SessionInvalidSignatureError extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = msg;
+  }
+}
+
+class SessionExpiredError extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = msg;
+  }
+}
+
+function Session(hmac) {
+
+  let hmac = hmac;
+
+  this.stringify = function(value, expires) {
+    // str = if string then uriencode(value) : uriencode(json.stringify(value))
+
+    // signature:base64url.expires:digit.value:
+  };
+
+  this.parseAndVerify = function(string, now) {
+    
+  };
+}
+
+
 exports.login = functions.https.onRequest(async (req, res) => {
   if (req.method != "GET") {
     res.sendStatus(400);
