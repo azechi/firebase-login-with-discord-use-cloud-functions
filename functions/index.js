@@ -16,9 +16,9 @@ admin.initializeApp();
 
 const { randomString, Hmac } = require("./crypto");
 const hmac = new Hmac("sha256", Buffer.from(config.keys[0], "base64"));
+const session = new Session(hmac);
 
 const noop = () => {};
-
 
 class SessionInvalidSignatureError extends Error {
   constructor(msg) {
@@ -35,20 +35,57 @@ class SessionExpiredError extends Error {
 }
 
 function Session(hmac) {
-
   let hmac = hmac;
 
-  this.stringify = function(value, expires) {
-    // str = if string then uriencode(value) : uriencode(json.stringify(value))
+  const separator = ".";
 
-    // signature:base64url.expires:digit.value:
+  this.signAndStringify = function (value, expires) {
+    const exp = String(expires.getTime());
+
+    const str =
+      typeof value == "string"
+        ? value
+        : encodeURIComponent(JSON.stringify(value));
+
+    const data = exp + separator + str;
+
+    return hmac.sign(data) + separator + data;
   };
 
-  this.parseAndVerify = function(string, now) {
-    
+  this.parseAndVerify = function (string, now) {
+    now = String(now.getTime());
+
+    const { sign, data } = splitN(string, separator, 2);
+
+    if (!hmac.verify(sign, data)) {
+      return new SessionInvalidSignatureError();
+    }
+
+    const { exp, value } = splitN(data, separator, 2);
+
+    if (new Date(exp) <= now) {
+      return new SessionExpiredError();
+    }
+
+    return JSON.parse(decodeURIComponent(value));
   };
 }
 
+function splitN(s, sep, c) {
+  const acm = [];
+  let i = 0;
+  let j;
+  while (--c) {
+    j = s.indexOf(sep, i);
+    if (j === -1) {
+      break;
+    }
+    acm.push(s.substring(i, j));
+    i = j + sep.length;
+  }
+  acm.push(s.substring(i));
+  return acm;
+}
 
 exports.login = functions.https.onRequest(async (req, res) => {
   if (req.method != "GET") {
@@ -67,12 +104,7 @@ exports.login = functions.https.onRequest(async (req, res) => {
   const state = randomString(24);
   res.cookie(
     "__session",
-    qs.stringify(
-      hmac.sign({
-        value: state,
-        expires: Date.now() + 10 * 60 * 1000,
-      })
-    ),
+    session.signAndStringify(state, new Date(Date.now() + 10 * 60 * 1000)),
     getCookieOption(!req.fromLocalhost)
   );
 
@@ -102,16 +134,17 @@ exports.token = functions.https.onRequest(async (req, res) => {
     return;
   }
 
-  const signedSession = qs.parse(
-    cookie.parse(req.headers.cookie)["__session"] || ""
+  const sessionCookieValue = cookie.parse(
+    req.headers.cookie["__session"] || ""
   );
-  if (!verifySession(signedSession, new Date())) {
+
+  const state = session.parseAndVerify(sessionCookieValue, new Date());
+  if (state instanceof Error) {
     res.sendStatus(400);
     return;
   }
 
-  const session = signedSession.value;
-  if (req.body.state !== session.value) {
+  if (req.body.state !== state) {
     res.sendStatus(400);
     return;
   }
@@ -191,16 +224,4 @@ function serverUrlRoot(req, res, next) {
       req.headers["x-forwarded-host"]
   );
   next();
-}
-
-function verifySession(session, now) {
-  if (!hmac.verify(session)) {
-    return false;
-  }
-
-  if (+session.expires <= now.getTime()) {
-    return false;
-  }
-
-  return true;
 }
