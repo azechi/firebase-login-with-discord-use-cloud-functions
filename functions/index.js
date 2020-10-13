@@ -127,9 +127,7 @@ exports.token = functions.https.onRequest(async (req, res) => {
     return;
   }
 
-  const sessionCookieValue = cookie.parse(
-    req.headers.cookie["__session"] || ""
-  );
+  const sessionCookieValue = cookie.parse(req.headers.cookie)["__session"];
 
   const state = session.parseAndVerify(sessionCookieValue, new Date());
   if (state instanceof Error) {
