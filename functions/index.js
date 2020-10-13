@@ -14,12 +14,6 @@ const cookie = require("cookie");
 
 admin.initializeApp();
 
-const { randomString, Hmac } = require("./crypto");
-const hmac = new Hmac("sha256", Buffer.from(config.keys[0], "base64"));
-const session = new Session(hmac);
-
-const noop = () => {};
-
 class SessionInvalidSignatureError extends Error {
   constructor(msg) {
     super(msg);
@@ -33,38 +27,37 @@ class SessionExpiredError extends Error {
     this.name = msg;
   }
 }
+const { randomString, Hmac } = require("./crypto");
+const hmac = new Hmac("sha256", Buffer.from(config.keys[0], "base64"));
+const session = new Session(hmac);
+
+const noop = () => {};
 
 function Session(hmac) {
-  let hmac = hmac;
+  let key = hmac;
 
   const separator = ".";
 
   this.signAndStringify = function (value, expires) {
     const exp = String(expires.getTime());
-
-    const str =
-      typeof value == "string"
-        ? value
-        : encodeURIComponent(JSON.stringify(value));
-
+    const str = encodeURIComponent(JSON.stringify(value));
     const data = exp + separator + str;
-
-    return hmac.sign(data) + separator + data;
+    return key.sign(data) + separator + data;
   };
 
   this.parseAndVerify = function (string, now) {
     now = String(now.getTime());
 
-    const { sign, data } = splitN(string, separator, 2);
+    const [sign, data] = splitN(string, separator, 2);
 
-    if (!hmac.verify(sign, data)) {
-      return new SessionInvalidSignatureError();
+    if (!key.verify(sign, data)) {
+      return new SessionInvalidSignatureError("session invalid signature");
     }
 
-    const { exp, value } = splitN(data, separator, 2);
+    const [exp, value] = splitN(data, separator, 2);
 
-    if (new Date(exp) <= now) {
-      return new SessionExpiredError();
+    if (new Date(Number(exp)) <= now) {
+      return new SessionExpiredError("session expired");
     }
 
     return JSON.parse(decodeURIComponent(value));
@@ -211,8 +204,11 @@ function getCookieOption(secure) {
 }
 
 function fromLocalhost(req, res, next) {
-  req.fromLocalhost =
-    req.headers["x-forwarded-host"].split(":")[0].toLowerCase() === "localhost";
+  req.fromLocalhost = req.hostname === "localhost";
+
+  //req.fromLocalhost =
+  //  req.headers["x-forwarded-host"].split(":")[0].toLowerCase() === "localhost";
+
   next();
 }
 

@@ -10,30 +10,22 @@ function randomString(byteSize) {
 }
 
 function Hmac(algorithm, key) {
+  /**
+   * Hmac sha256 digest base64url
+   * @param {string | Buffer | TypedArray | DataView} data
+   * @return {string} - Base64url encoded string
+   */
   this.sign = function (data) {
-    return {
-      sign: getSignature(algorithm, key, qs.stringify(data)),
-      value: data,
-    };
+    const digest = crypto
+      .createHmac(algorithm, key)
+      .update(data) // string | Buffer | TypedArray | DataView
+      .digest();
+    return toBase64Url(digest);
   };
 
-  this.verify = function ({ sign, value }) {
-    return compare(sign, getSignature(algorithm, key, qs.stringify(value)));
+  this.verify = function (sign, value) {
+    return compare(sign, this.sign(value));
   };
-}
-
-/**
- * Hmac sha256 digest base64url
- * @param {string | Buffer | TypedArray | DataView} data
- * @return {string} - Base64url encoded string
- */
-function getSignature(algorithm, key, data) {
-  const digest = crypto
-    .createHmac(algorithm, key)
-    .update(data) // string | Buffer | TypedArray | DataView
-    .digest();
-
-  return toBase64Url(digest);
 }
 
 /**
