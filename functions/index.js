@@ -4,8 +4,6 @@ const admin = require("firebase-admin");
 const qs = require("qs");
 const url = require("url");
 
-const config = functions.config();
-
 const https = require("https");
 const agent = new https.Agent({ keepAlive: true });
 const fetch = require("node-fetch");
@@ -28,8 +26,16 @@ class SessionExpiredError extends Error {
   }
 }
 const { randomString, Hmac } = require("./crypto");
-const hmac = new Hmac("sha256", Buffer.from(config.keys[0], "base64"));
-const session = new Session(hmac);
+let _key;
+function getKey() {
+
+  if(!_key) {
+    const hmac = new Hmac("sha256", Buffer.from(process.env.DISCORD_CLIENT_SECRET), "base64");
+    _key = new Session(hmac);
+  }
+  return _key;
+
+}
 
 const noop = () => {};
 
@@ -80,7 +86,7 @@ function splitN(s, sep, c) {
   return acm;
 }
 
-exports.login = functions.https.onRequest(async (req, res) => {
+exports.login = functions.runWith({secrets:["DISCORD_CLIENT_SECRET"]}).https.onRequest(async (req, res) => {
   if (req.method != "GET") {
     res.sendStatus(400);
     return;
@@ -94,10 +100,12 @@ exports.login = functions.https.onRequest(async (req, res) => {
   fromLocalhost(req, null, noop);
   serverUrlRoot(req, res, noop);
 
+  const key = getKey();
+
   const state = randomString(24);
   res.cookie(
     "__session",
-    session.signAndStringify(state, new Date(Date.now() + 10 * 60 * 1000)),
+    key.signAndStringify(state, new Date(Date.now() + 10 * 60 * 1000)),
     getCookieOption(!req.fromLocalhost)
   );
 
@@ -105,7 +113,7 @@ exports.login = functions.https.onRequest(async (req, res) => {
     302,
     "https://discord.com/api/oauth2/authorize?" +
       qs.stringify({
-        client_id: config.discord.azechify.client_id,
+        client_id: process.env.DISCORD_CLIENT_ID,
         response_type: "code",
         scope: "identify",
         prompt: "none",
@@ -116,7 +124,7 @@ exports.login = functions.https.onRequest(async (req, res) => {
   );
 });
 
-exports.token = functions.https.onRequest(async (req, res) => {
+exports.token = functions.runWith({secrets:["DISCORD_CLIENT_SECRET"]}).https.onRequest(async (req, res) => {
   if (req.method != "POST") {
     res.sendStatus(400);
     return;
@@ -130,7 +138,9 @@ exports.token = functions.https.onRequest(async (req, res) => {
   const sessionCookieValue =
     cookie.parse(req.headers.cookie || "")["__session"] || "";
 
-  const state = session.parseAndVerify(sessionCookieValue, new Date());
+  const key = getKey();
+
+  const state = key.parseAndVerify(sessionCookieValue, new Date());
   if (state instanceof Error) {
     res.sendStatus(400);
     return;
@@ -148,7 +158,7 @@ exports.token = functions.https.onRequest(async (req, res) => {
     method: "POST",
     agent: agent,
     body: new url.URLSearchParams({
-      client_id: config.discord.azechify.client_id,
+      client_id: process.env.DISCORD_CLIENT_ID,
       //client_secret: config.discord.azechify.client_secret,
       redirect_uri: req.serverUrlRoot.href,
       grant_type: "authorization_code",
