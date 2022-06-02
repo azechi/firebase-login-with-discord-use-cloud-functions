@@ -1,21 +1,10 @@
 
+import "./init.js";
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.8.2/firebase-app.js";
 import { getAuth, connectAuthEmulator, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.8.2/firebase-auth.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyAqPJJnB-QxLDJSIflbOH39apMSLuKP7DQ",
-  authDomain: "discord-log-in.firebaseapp.com",
-  projectId: "discord-log-in",
-  storageBucket: "discord-log-in.appspot.com",
-  messagingSenderId: "968139252059",
-  appId: "1:968139252059:web:a209c81825ee10da32ba7e"
-};
-
-initializeApp(firebaseConfig);
 const auth = getAuth();
 connectAuthEmulator(auth, "http://127.0.0.1:9099");
-
 
 const STORAGE_KEY = "code_verifier";
 const storage = window.sessionStorage;
