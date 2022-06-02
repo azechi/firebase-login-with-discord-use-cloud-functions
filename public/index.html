@@ -5,97 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Welcome to Firebase Hosting</title>
 
-    <script defer src="/__/firebase/7.19.1/firebase-app.js"></script>
-    <script defer src="/__/firebase/7.19.1/firebase-auth.js"></script>
-    <script defer src="/__/firebase/init.js"></script>
-
-    <script type="module">
-      const STORAGE_KEY = "code_verifier";
-      const storage = window.sessionStorage;
-
-      const url = new URL(window.location);
-      if (
-        ["code", "state"].every(Array.prototype.includes, [
-          ...url.searchParams.keys(),
-        ])
-      ) {
-        handleRedirectCallback();
-        url.searchParams.delete("code");
-        url.searchParams.delete("state");
-        window.history.replaceState({}, document.title, url.href);
-      }
-      function handleRedirectCallback() {
-        console.log(
-          "handleRedirectCallback",
-          "code:",
-          url.searchParams.get("code"),
-          "state:",
-          url.searchParams.get("state")
-        );
-
-        fetch("/token", {
-          method: "POST",
-          credentials: "same-origin",
-          body: new URLSearchParams({
-            code_verifier: storage.getItem(STORAGE_KEY),
-            code: url.searchParams.get("code"),
-            state: url.searchParams.get("state"),
-          }),
-        })
-          .then((res) => res.text())
-          .then((token) => {
-            firebase.auth().signInWithCustomToken(token).then(console.log);
-          });
-
-        console.log("post token endpoint");
-      }
-    </script>
-    <script type="module">
-      const STORAGE_KEY = "code_verifier";
-      const storage = window.sessionStorage;
-
-      firebase.auth().onAuthStateChanged((user) => {
-        if (!user) {
-          //loginWithRedirect();
-          console.log("singed out");
-          return;
-        }
-
-        console.log(user);
-      });
-
-      document.getElementById("login").addEventListener("click", async () => {
-        console.log("click");
-        // screen lock on
-
-        await loginWithRedirect();
-      });
-
-      async function loginWithRedirect() {
-        const code_verifier = btoa(
-          String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32)))
-        ).replace(/\/|\+|=/g, (x) => ({ "/": "_", "+": "-", "=": "" }[x]));
-
-        storage.setItem(STORAGE_KEY, code_verifier);
-
-        const hash = await crypto.subtle.digest(
-          "SHA-256",
-          new Uint8Array([...code_verifier].map((e) => e.charCodeAt(0)))
-        );
-        const code_challenge = btoa(
-          String.fromCharCode(...new Uint8Array(hash))
-        ).replace(/\/|\+|=/g, (x) => ({ "/": "_", "+": "-", "=": "" }[x]));
-
-        const p = {
-          code_challenge: code_challenge,
-          code_challenge_method: "sha256",
-        };
-
-        self.location.assign("/login?" + new URLSearchParams(p).toString());
-      }
-    </script>
+    <script type="module" src="./index.js"></script>
   </head>
   <body>
-    <button type="button" id="login">ログイン</button>
+    <button type="button" id="login" disabled>ログイン</button>
   </body>
 </html>
